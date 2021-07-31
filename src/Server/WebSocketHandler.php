@@ -13,8 +13,9 @@ use Exception;
 use Ratchet\ConnectionInterface;
 use Ratchet\RFC6455\Messaging\MessageInterface;
 use Ratchet\WebSocket\MessageComponentInterface;
+use Ratchet\WebSocket\WsServerInterface;
 
-class WebSocketHandler implements MessageComponentInterface
+class WebSocketHandler implements MessageComponentInterface, WsServerInterface
 {
     /**
      * The channel manager.
@@ -34,6 +35,22 @@ class WebSocketHandler implements MessageComponentInterface
         $this->channelManager = $channelManager;
     }
 
+    /*
+     * Match pusher channel protocols
+     * @link https://pusher.com/docs/channels/library_auth_reference/pusher-websockets-protocol
+     * plus custom for web client
+     */
+    public function getSubProtocols()
+    {
+        return [
+            'pusher-channels-protocol-7',
+            'pusher-channels-protocol-6',
+            'pusher-channels-protocol-5',
+            'pusher-channels-protocol-4',
+            'web-channels-protocol-1',
+        ];
+    }
+
     /**
      * Handle the socket opening.
      *
@@ -42,7 +59,7 @@ class WebSocketHandler implements MessageComponentInterface
      */
     public function onOpen(ConnectionInterface $connection)
     {
-        if (! $this->connectionCanBeMade($connection)) {
+        if (!$this->connectionCanBeMade($connection)) {
             return $connection->close();
         }
 
@@ -82,7 +99,7 @@ class WebSocketHandler implements MessageComponentInterface
      */
     public function onMessage(ConnectionInterface $connection, MessageInterface $message)
     {
-        if (! isset($connection->app)) {
+        if (!isset($connection->app)) {
             return;
         }
 
@@ -168,7 +185,7 @@ class WebSocketHandler implements MessageComponentInterface
 
         $appKey = $query->get('appKey');
 
-        if (! $app = App::findByKey($appKey)) {
+        if (!$app = App::findByKey($appKey)) {
             throw new Exceptions\UnknownAppKey($appKey);
         }
 
@@ -185,7 +202,7 @@ class WebSocketHandler implements MessageComponentInterface
      */
     protected function verifyOrigin(ConnectionInterface $connection)
     {
-        if (! $connection->app->allowedOrigins) {
+        if (!$connection->app->allowedOrigins) {
             return $this;
         }
 
@@ -193,7 +210,7 @@ class WebSocketHandler implements MessageComponentInterface
 
         $origin = parse_url($header, PHP_URL_HOST) ?: $header;
 
-        if (! $header || ! in_array($origin, $connection->app->allowedOrigins)) {
+        if (!$header || !in_array($origin, $connection->app->allowedOrigins)) {
             throw new Exceptions\OriginNotAllowed($connection->app->key);
         }
 
@@ -208,7 +225,7 @@ class WebSocketHandler implements MessageComponentInterface
      */
     protected function limitConcurrentConnections(ConnectionInterface $connection)
     {
-        if (! is_null($capacity = $connection->app->capacity)) {
+        if (!is_null($capacity = $connection->app->capacity)) {
             $this->channelManager
                 ->getGlobalConnectionsCount($connection->app->id)
                 ->then(function ($connectionsCount) use ($capacity, $connection) {
